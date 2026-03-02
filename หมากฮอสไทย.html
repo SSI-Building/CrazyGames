@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thai Checkers - Mandatory Jump Edition</title>
+    <style>
+        :root {
+            --bg: #1e1e1e; --dark: #5d4037; --light: #d7ccc8; --p1: #ffffff; --p2: #ff3d00;
+            --highlight: #ffeb3b;
+        }
+        body { 
+            background: var(--bg); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; flex-direction: column; align-items: center; padding: 20px; 
+        }
+        h2 { margin-bottom: 10px; color: #fff; }
+        #status { margin-bottom: 15px; font-size: 1.3rem; color: var(--highlight); height: 35px; font-weight: bold; }
+        
+        .board { 
+            display: grid; grid-template-columns: repeat(8, 65px); 
+            border: 10px solid #3e2723; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .cell { 
+            width: 65px; height: 65px; display: flex; justify-content: center; 
+            align-items: center; position: relative; cursor: pointer; 
+        }
+        .dark { background: var(--dark); } 
+        .light { background: var(--light); }
+        
+        .piece { 
+            width: 52px; height: 52px; border-radius: 50%; z-index: 5; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4); border: 2px solid rgba(0,0,0,0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .p1 { background: var(--p1); background: radial-gradient(circle at 30% 30%, #fff, #ccc); } 
+        .p2 { background: var(--p2); background: radial-gradient(circle at 30% 30%, #ff6e40, #bf360c); }
+        
+        .king::after { 
+            content: '👑'; font-size: 26px; display: flex; justify-content: center; 
+            align-items: center; height: 100%; color: gold; text-shadow: 1px 1px 2px black;
+        }
+        
+        .selected { transform: scale(1.1); outline: 4px solid var(--highlight); z-index: 10; }
+        
+        /* เอฟเฟกต์หมากที่บังคับต้องกิน */
+        .must-eat {
+            animation: pulse 1s infinite;
+            box-shadow: 0 0 15px var(--highlight) !important;
+            border: 3px solid var(--highlight) !important;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .hint { 
+            width: 18px; height: 18px; background: rgba(76, 175, 80, 0.7); 
+            border-radius: 50%; position: absolute; border: 2px solid white;
+        }
+        
+        button { 
+            margin-top: 25px; padding: 12px 30px; cursor: pointer; background: #4caf50; 
+            color: white; border: none; font-weight: bold; border-radius: 5px; font-size: 1rem;
+            transition: background 0.3s;
+        }
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+
+    <h2>หมากฮอสไทย (กฎ: บังคับกิน)</h2>
+    <div id="status">รอสักครู่...</div>
+    <div class="board" id="board"></div>
+    <button onclick="resetGame()">เริ่มเกมใหม่</button>
+
+<script>
+const SIZE = 8;
+const DEPTH = 4; // ความฉลาดของ AI
+let board = [], turn = 'p1', selected = null, isMultiJumping = false;
+
+function initBoard() {
+    board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
+    // ฝั่ง AI (p2)
+    for (let r=0; r<2; r++) for (let c=0; c<SIZE; c++) if ((r+c)%2!==0) board[r][c] = {p:'p2', king:false};
+    // ฝั่งผู้เล่น (p1)
+    for (let r=6; r<8; r++) for (let c=0; c<SIZE; c++) if ((r+c)%2!==0) board[r][c] = {p:'p1', king:false};
+}
+
+function copyBoard(b) {
+    return b.map(row => row.map(p => p ? { ...p } : null));
+}
+
+// เช็คการเดิน/กิน ของหมากตัวนั้นๆ
+function getValidMoves(r, c, b, forceEatOnly = false) {
+    const p = b[r][c]; if (!p) return [];
+    let ms = [], caps = [];
+    const dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+    const fwd = p.p === 'p1' ? -1 : 1;
+
+    if (p.king) {
+        dirs.forEach(([dr, dc]) => {
+            let tr = r + dr, tc = c + dc;
+            let enemyPos = null;
+            while (tr >= 0 && tr < SIZE && tc >= 0 && tc < SIZE) {
+                if (!enemyPos) {
+                    if (b[tr][tc]) {
+                        if (b[tr][tc].p !== p.p) enemyPos = {r: tr, c: tc};
+                        else break;
+                    } else {
+                        if (!forceEatOnly) ms.push({r: tr, c: tc});
+                    }
+                } else {
+                    if (!b[tr][tc]) {
+                        caps.push({r: tr, c: tc, eat: enemyPos});
+                    }
+                    break; // ฮอสไทยกินแล้ววางช่องถัดไป 1 ช่องเท่านั้น
+                }
+                tr += dr; tc += dc;
+            }
+        });
+    } else {
+        dirs.forEach(([dr, dc]) => {
+            const tr = r + dr, tc = c + dc;
+            const nr = r + dr * 2, nc = c + dc * 2;
+            // เช็คกิน (กินได้ทั้งหน้าและหลังสำหรับหมากทั่วไปในบางกฎ แต่ที่นี่เน้นเดินหน้าตามโค้ดเดิม)
+            if (dr === fwd && nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+                if (b[tr][tc] && b[tr][tc].p !== p.p && !b[nr][nc]) {
+                    caps.push({r: nr, c: nc, eat: {r: tr, c: tc}});
+                }
+            }
+            // เช็คเดินปกติ
+            if (!forceEatOnly && dr === fwd && tr >= 0 && tr < SIZE && tc >= 0 && tc < SIZE) {
+                if (!b[tr][tc]) ms.push({r: tr, c: tc});
+            }
+        });
+    }
+    return caps.length > 0 ? caps : (forceEatOnly ? [] : ms);
+}
+
+// ค้นหาหมากทุกตัวที่เดินได้ และจัดการกฎ "บังคับกิน"
+function getAllPossible(player, b) {
+    let all = [];
+    for(let r=0; r<SIZE; r++) {
+        for(let c=0; c<SIZE; c++) {
+            if(b[r][c]?.p === player) {
+                const moves = getValidMoves(r, c, b);
+                if(moves.length > 0) all.push({from: {r, c}, list: moves});
+            }
+        }
+    }
+    // เช็คว่ามีตัวไหนกินได้บ้าง
+    const hasCapture = all.some(a => a.list.some(m => m.eat));
+    if (hasCapture) {
+        // ถ้ามีการกิน ให้กรองเหลือแต่ตัวที่กินได้ และในลิสต์การเดินของตัวนั้นให้เหลือแต่ตากิน
+        return all.filter(a => a.list.some(m => m.eat))
+                  .map(a => ({from: a.from, list: a.list.filter(m => m.eat)}));
+    }
+    return all;
+}
+
+function executeMove(from, to, b = board) {
+    const p = b[from.r][from.c];
+    const moves = getValidMoves(from.r, from.c, b);
+    const m = moves.find(x => x.r === to.r && x.c === to.c);
+    if (!m) return false;
+
+    b[to.r][to.c] = p; 
+    b[from.r][from.c] = null;
+    if (m.eat) b[m.eat.r][m.eat.c] = null;
+
+    let justPromoted = false;
+    if (!p.king) {
+        if ((p.p === 'p1' && to.r === 0) || (p.p === 'p2' && to.r === 7)) {
+            p.king = true; justPromoted = true; 
+        }
+    }
+    // ถ้ากินแล้ว และยังไม่ได้เป็นฮอสในตานี้ ให้เช็คว่ากินต่อได้ไหม
+    if (m.eat && !justPromoted) {
+        const next = getValidMoves(to.r, to.c, b, true);
+        if (next.length > 0) return true;
+    }
+    return false;
+}
+
+// --- AI Section (Minimax) ---
+function evaluate(b) {
+    let score = 0;
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            const p = b[r][c];
+            if (p) {
+                const val = p.king ? 4 : 1;
+                score += (p.p === 'p2' ? val : -val);
+            }
+        }
+    }
+    return score;
+}
+
+function generateCaptureSequences(b, r, c, seq) {
+    const caps = getValidMoves(r, c, b, true);
+    if (caps.length === 0) return [{ board: copyBoard(b), sequence: [...seq] }];
+    let res = [];
+    for (let cap of caps) {
+        let newb = copyBoard(b);
+        executeMove({ r, c }, cap, newb);
+        res.push(...generateCaptureSequences(newb, cap.r, cap.c, [...seq, { from: { r, c }, to: cap }]));
+    }
+    return res;
+}
+
+function getSuccessors(player, b) {
+    let successors = [];
+    const moveGroups = getAllPossible(player, b);
+    for (let group of moveGroups) {
+        for (let to of group.list) {
+            let newb = copyBoard(b);
+            const canJumpMore = executeMove(group.from, to, newb);
+            if (to.eat && canJumpMore) {
+                successors.push(...generateCaptureSequences(newb, to.r, to.c, [{ from: group.from, to }]));
+            } else {
+                successors.push({ board: newb, sequence: [{ from: group.from, to }] });
+            }
+        }
+    }
+    return successors;
+}
+
+function minimax(bd, depth, alpha, beta, isMaximizing) {
+    if (depth === 0) return evaluate(bd);
+    const succs = getSuccessors(isMaximizing ? 'p2' : 'p1', bd);
+    if (succs.length === 0) return isMaximizing ? -1000 : 1000;
+
+    if (isMaximizing) {
+        let maxE = -Infinity;
+        for (let s of succs) {
+            maxE = Math.max(maxE, minimax(s.board, depth - 1, alpha, beta, false));
+            alpha = Math.max(alpha, maxE);
+            if (beta <= alpha) break;
+        }
+        return maxE;
+    } else {
+        let minE = Infinity;
+        for (let s of succs) {
+            minE = Math.min(minE, minimax(s.board, depth - 1, alpha, beta, true));
+            beta = Math.min(beta, minE);
+            if (beta <= alpha) break;
+        }
+        return minE;
+    }
+}
+
+function aiPlay() {
+    const succs = getSuccessors('p2', board);
+    if (succs.length === 0) {
+        document.getElementById('status').innerText = "คุณชนะ! 🎉";
+        return;
+    }
+    let bestScore = -Infinity, bestSeq = null;
+    for (let s of succs) {
+        const score = minimax(s.board, DEPTH - 1, -Infinity, Infinity, false);
+        if (score > bestScore) { bestScore = score; bestSeq = s.sequence; }
+    }
+    playSequence(bestSeq);
+}
+
+function playSequence(seq, index = 0) {
+    if (index >= seq.length) {
+        turn = 'p1';
+        checkGameOver();
+        render();
+        return;
+    }
+    executeMove(seq[index].from, seq[index].to);
+    render();
+    setTimeout(() => playSequence(seq, index + 1), 500);
+}
+
+// --- Interaction Section ---
+function handleCellClick(r, c) {
+    if (turn !== 'p1') return;
+
+    const allPossible = getAllPossible('p1', board);
+    if (allPossible.length === 0) return;
+
+    const hasCapture = allPossible.some(a => a.list.some(m => m.eat));
+
+    if (board[r][c]?.p === 'p1') {
+        if (isMultiJumping) return;
+
+        // บังคับเลือกเฉพาะตัวที่กินได้
+        const canCapture = allPossible.find(a => a.from.r === r && a.from.c === c);
+        if (hasCapture && (!canCapture || !canCapture.list[0].eat)) {
+            document.getElementById('status').innerText = "⚠️ ต้องกินเท่านั้น!";
+            return;
+        }
+
+        if (canCapture) {
+            selected = { r, c, moves: canCapture.list };
+            document.getElementById('status').innerText = "เลือกจุดที่จะเดิน...";
+        }
+    } else if (selected) {
+        const m = selected.moves.find(x => x.r === r && x.c === c);
+        if (m) {
+            const jumping = executeMove({r:selected.r, c:selected.c}, m);
+            if (jumping) {
+                isMultiJumping = true;
+                selected = { r: m.r, c: m.c, moves: getValidMoves(m.r, m.c, board, true) };
+            } else {
+                isMultiJumping = false; selected = null; turn = 'p2';
+                document.getElementById('status').innerText = "AI กำลังคิด...";
+                setTimeout(aiPlay, 600);
+            }
+        } else if (!isMultiJumping) {
+            selected = null;
+            document.getElementById('status').innerText = "ตาของคุณ (ขาว)";
+        }
+    }
+    render();
+}
+
+function checkGameOver() {
+    const p1Moves = getAllPossible('p1', board);
+    const p2Moves = getAllPossible('p2', board);
+    
+    if (turn === 'p1' && p1Moves.length === 0) {
+        document.getElementById('status').innerText = "คุณแพ้แล้ว! 💀";
+    } else if (turn === 'p2' && p2Moves.length === 0) {
+        document.getElementById('status').innerText = "คุณชนะ! 🎉";
+    } else {
+        document.getElementById('status').innerText = turn === 'p1' ? "ตาของคุณ (ขาว)" : "AI กำลังเดิน...";
+    }
+}
+
+function render() {
+    const el = document.getElementById('board'); el.innerHTML = '';
+    const allPossible = getAllPossible('p1', board);
+    const hasCapture = allPossible.some(a => a.list.some(m => m.eat));
+
+    for (let r=0; r<SIZE; r++) {
+        for (let c=0; c<SIZE; c++) {
+            const cell = document.createElement('div');
+            cell.className = `cell ${(r+c)%2===0?'light':'dark'}`;
+            
+            const p = board[r][c];
+            if (p) {
+                const pEl = document.createElement('div');
+                pEl.className = `piece ${p.p} ${p.king?'king':''}`;
+                if (selected?.r === r && selected?.c === c) pEl.classList.add('selected');
+                
+                // ใส่ Class บังคับกินให้ผู้เล่นเห็นชัดๆ
+                if (turn === 'p1' && !isMultiJumping && hasCapture) {
+                    if (allPossible.some(a => a.from.r === r && a.from.c === c)) {
+                        pEl.classList.add('must-eat');
+                    }
+                }
+                // ถ้าอยู่ในสถานะกินต่อเนื่อง
+                if (isMultiJumping && selected?.r === r && selected?.c === c) {
+                    pEl.classList.add('must-eat');
+                }
+
+                cell.appendChild(pEl);
+            }
+            if (selected?.moves.some(m => m.r === r && m.c === c)) {
+                const h = document.createElement('div'); h.className = 'hint'; cell.appendChild(h);
+            }
+            cell.onclick = () => handleCellClick(r, c);
+            el.appendChild(cell);
+        }
+    }
+}
+
+function resetGame() { 
+    initBoard(); turn='p1'; selected=null; isMultiJumping = false;
+    document.getElementById('status').innerText = "ตาของคุณ (ขาว)";
+    render(); 
+}
+
+initBoard();
+setTimeout(() => {
+    document.getElementById('status').innerText = "ตาของคุณ (ขาว)";
+    render();
+}, 100);
+</script>
+</body>
+</html>

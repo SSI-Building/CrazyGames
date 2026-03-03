@@ -3,77 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thai Checkers - Mandatory Jump Edition</title>
+    <title>Thai Checkers - Modern Pro</title>
     <style>
         :root {
-            --bg: #1e1e1e; --dark: #5d4037; --light: #d7ccc8; --p1: #ffffff; --p2: #ff3d00;
-            --highlight: #ffeb3b;
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --board-dark: #2c3e50;
+            --board-light: #ecf0f1;
+            --p1-color: #ffffff;
+            --p2-color: #e74c3c;
+            --accent: #f1c40f;
+            --glass: rgba(255, 255, 255, 0.1);
+            --shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
+
         body {
-            background: var(--bg); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex; flex-direction: column; align-items: center; padding: 20px;
+            background: var(--bg-gradient);
+            color: white;
+            font-family: 'Prompt', 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
         }
-        h2 { margin-bottom: 10px; color: #fff; }
-        #status { margin-bottom: 15px; font-size: 1.3rem; color: var(--highlight); height: 35px; font-weight: bold; }
-       
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            backdrop-filter: blur(10px);
+            background: var(--glass);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: var(--shadow);
+        }
+
+        .dashboard {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 520px;
+            margin-bottom: 10px;
+        }
+
+        .stat-box {
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 12px;
+            border-bottom: 3px solid transparent;
+        }
+        .stat-box.active { border-color: var(--accent); }
+        .stat-label { font-size: 0.8rem; opacity: 0.7; text-transform: uppercase; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; }
+
+        h2 { margin: 0; font-weight: 300; letter-spacing: 2px; }
+
+        #status {
+            font-size: 1.2rem;
+            color: var(--accent);
+            font-weight: 500;
+            height: 30px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
         .board {
-            display: grid; grid-template-columns: repeat(8, 65px);
-            border: 10px solid #3e2723; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: grid;
+            grid-template-columns: repeat(8, 65px);
+            border: 8px solid #222;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
         }
+
         .cell {
-            width: 65px; height: 65px; display: flex; justify-content: center;
-            align-items: center; position: relative; cursor: pointer;
+            width: 65px;
+            height: 65px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            transition: 0.2s;
         }
-        .dark { background: var(--dark); }
-        .light { background: var(--light); }
-       
+
+        .dark { background: var(--board-dark); }
+        .light { background: var(--board-light); }
+        .cell:hover { opacity: 0.9; }
+
         .piece {
-            width: 52px; height: 52px; border-radius: 50%; z-index: 5;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.4); border: 2px solid rgba(0,0,0,0.2);
-            transition: transform 0.2s, box-shadow 0.2s;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            z-index: 5;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 6px 0 rgba(0,0,0,0.3);
         }
-        .p1 { background: var(--p1); background: radial-gradient(circle at 30% 30%, #fff, #ccc); }
-        .p2 { background: var(--p2); background: radial-gradient(circle at 30% 30%, #ff6e40, #bf360c); }
-       
+
+        .p1 { 
+            background: radial-gradient(circle at 30% 30%, #fff, #bdc3c7);
+            border: 1px solid #999;
+        }
+        .p2 { 
+            background: radial-gradient(circle at 30% 30%, #ff7675, #d63031);
+            border: 1px solid #a22;
+        }
+
         .king::after {
-            content: '👑'; font-size: 26px; display: flex; justify-content: center;
-            align-items: center; height: 100%; color: gold; text-shadow: 1px 1px 2px black;
+            content: '👑';
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
         }
-       
-        .selected { transform: scale(1.1); outline: 4px solid var(--highlight); z-index: 10; }
-       
+
+        .selected {
+            transform: translateY(-5px) scale(1.1);
+            box-shadow: 0 15px 20px rgba(0,0,0,0.4);
+            filter: brightness(1.2);
+            outline: 3px solid var(--accent);
+            outline-offset: 2px;
+        }
+
         .must-eat {
-            animation: pulse 1s infinite;
-            box-shadow: 0 0 15px var(--highlight) !important;
-            border: 3px solid var(--highlight) !important;
+            animation: pulse 1s infinite ease-in-out;
+            border: 3px solid var(--accent) !important;
         }
+
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+            0% { box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(241, 196, 15, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); }
         }
+
         .hint {
-            width: 18px; height: 18px; background: rgba(76, 175, 80, 0.7);
-            border-radius: 50%; position: absolute; border: 2px solid white;
+            width: 20px;
+            height: 20px;
+            background: rgba(46, 204, 113, 0.6);
+            border-radius: 50%;
+            position: absolute;
+            border: 2px solid white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s;
         }
-       
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         button {
-            margin-top: 25px; padding: 12px 30px; cursor: pointer; background: #4caf50;
-            color: white; border: none; font-weight: bold; border-radius: 5px; font-size: 1rem;
-            transition: background 0.3s;
+            margin-top: 10px;
+            padding: 12px 40px;
+            cursor: pointer;
+            background: #2ecc71;
+            color: white;
+            border: none;
+            font-weight: bold;
+            border-radius: 50px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
-        button:hover { background: #45a049; }
+
+        button:hover {
+            background: #27ae60;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.6);
+        }
+
+        button:active { transform: translateY(0); }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
-    <h2>หมากฮอสไทย (กฎ: บังคับกิน)</h2>
-    <div id="status">รอสักครู่...</div>
+
+<div class="game-container">
+    <h2>THAI CHECKERS</h2>
+    
+    <div class="dashboard">
+        <div class="stat-box" id="p1-stat">
+            <div class="stat-label">คุณ (ขาว)</div>
+            <div class="stat-value" id="p1-count">12</div>
+        </div>
+        <div id="status">กำลังโหลด...</div>
+        <div class="stat-box" id="p2-stat">
+            <div class="stat-label">AI (แดง)</div>
+            <div class="stat-value" id="p2-count">12</div>
+        </div>
+    </div>
+
     <div class="board" id="board"></div>
+    
     <button onclick="resetGame()">เริ่มเกมใหม่</button>
+</div>
+
+<div class="footer">Premium Interface v2.0 • Thai Rules</div>
 
 <script>
+// --- ส่วน Logic (คงเดิมตามความต้องการ) ---
 const SIZE = 8;
-const DEPTH = 4; // ความฉลาดของ AI
+const DEPTH = 4;
 let board = [], turn = 'p1', selected = null, isMultiJumping = false;
 
 function initBoard() {
@@ -87,25 +227,17 @@ function copyBoard(b) {
 }
 
 function countPieces(b) {
-    let p1Normal = 0, p1King = 0;
-    let p2Normal = 0, p2King = 0;
-    
+    let p1Normal = 0, p1King = 0, p2Normal = 0, p2King = 0;
     for (let r = 0; r < SIZE; r++) {
         for (let c = 0; c < SIZE; c++) {
             const p = b[r][c];
             if (p) {
-                if (p.p === 'p1') {
-                    if (p.king) p1King++;
-                    else p1Normal++;
-                } else if (p.p === 'p2') {
-                    if (p.king) p2King++;
-                    else p2Normal++;
-                }
+                if (p.p === 'p1') { p.king ? p1King++ : p1Normal++; }
+                else { p.king ? p2King++ : p2Normal++; }
             }
         }
     }
-    
-    return { p1Normal, p1King, p2Normal, p2King };
+    return { p1Normal, p1King, p2Normal, p2King, p1Total: p1Normal+p1King, p2Total: p2Normal+p2King };
 }
 
 function getValidMoves(r, c, b, forceEatOnly = false) {
@@ -116,20 +248,15 @@ function getValidMoves(r, c, b, forceEatOnly = false) {
 
     if (p.king) {
         dirs.forEach(([dr, dc]) => {
-            let tr = r + dr, tc = c + dc;
-            let enemyPos = null;
+            let tr = r + dr, tc = c + dc, enemyPos = null;
             while (tr >= 0 && tr < SIZE && tc >= 0 && tc < SIZE) {
                 if (!enemyPos) {
                     if (b[tr][tc]) {
                         if (b[tr][tc].p !== p.p) enemyPos = {r: tr, c: tc};
                         else break;
-                    } else {
-                        if (!forceEatOnly) ms.push({r: tr, c: tc});
-                    }
+                    } else if (!forceEatOnly) ms.push({r: tr, c: tc});
                 } else {
-                    if (!b[tr][tc]) {
-                        caps.push({r: tr, c: tc, eat: enemyPos});
-                    }
+                    if (!b[tr][tc]) caps.push({r: tr, c: tc, eat: enemyPos});
                     break;
                 }
                 tr += dr; tc += dc;
@@ -137,12 +264,9 @@ function getValidMoves(r, c, b, forceEatOnly = false) {
         });
     } else {
         dirs.forEach(([dr, dc]) => {
-            const tr = r + dr, tc = c + dc;
-            const nr = r + dr * 2, nc = c + dc * 2;
+            const tr = r + dr, tc = c + dc, nr = r + dr * 2, nc = c + dc * 2;
             if (dr === fwd && nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
-                if (b[tr][tc] && b[tr][tc].p !== p.p && !b[nr][nc]) {
-                    caps.push({r: nr, c: nc, eat: {r: tr, c: tc}});
-                }
+                if (b[tr][tc] && b[tr][tc].p !== p.p && !b[nr][nc]) caps.push({r: nr, c: nc, eat: {r: tr, c: tc}});
             }
             if (!forceEatOnly && dr === fwd && tr >= 0 && tr < SIZE && tc >= 0 && tc < SIZE) {
                 if (!b[tr][tc]) ms.push({r: tr, c: tc});
@@ -163,10 +287,7 @@ function getAllPossible(player, b) {
         }
     }
     const hasCapture = all.some(a => a.list.some(m => m.eat));
-    if (hasCapture) {
-        return all.filter(a => a.list.some(m => m.eat))
-                  .map(a => ({from: a.from, list: a.list.filter(m => m.eat)}));
-    }
+    if (hasCapture) return all.filter(a => a.list.some(m => m.eat)).map(a => ({from: a.from, list: a.list.filter(m => m.eat)}));
     return all;
 }
 
@@ -175,36 +296,20 @@ function executeMove(from, to, b = board) {
     const moves = getValidMoves(from.r, from.c, b);
     const m = moves.find(x => x.r === to.r && x.c === to.c);
     if (!m) return false;
-
-    b[to.r][to.c] = p;
-    b[from.r][from.c] = null;
+    b[to.r][to.c] = p; b[from.r][from.c] = null;
     if (m.eat) b[m.eat.r][m.eat.c] = null;
-
     let justPromoted = false;
-    if (!p.king) {
-        if ((p.p === 'p1' && to.r === 0) || (p.p === 'p2' && to.r === 7)) {
-            p.king = true;
-            justPromoted = true;
-        }
-    }
-
-    if (m.eat && !justPromoted) {
-        const next = getValidMoves(to.r, to.c, b, true);
-        if (next.length > 0) return true; // ยังกินต่อได้
-    }
+    if (!p.king && ((p.p === 'p1' && to.r === 0) || (p.p === 'p2' && to.r === 7))) { p.king = true; justPromoted = true; }
+    if (m.eat && !justPromoted && getValidMoves(to.r, to.c, b, true).length > 0) return true;
     return false;
 }
 
-// AI Section (Minimax) ----------------------------------------------------------------
 function evaluate(b) {
     let score = 0;
     for (let r = 0; r < SIZE; r++) {
         for (let c = 0; c < SIZE; c++) {
             const p = b[r][c];
-            if (p) {
-                const val = p.king ? 4 : 1;
-                score += (p.p === 'p2' ? val : -val);
-            }
+            if (p) { score += (p.p === 'p2' ? (p.king ? 4 : 1) : -(p.king ? 4 : 1)); }
         }
     }
     return score;
@@ -229,11 +334,8 @@ function getSuccessors(player, b) {
         for (let to of group.list) {
             let newb = copyBoard(b);
             const canJumpMore = executeMove(group.from, to, newb);
-            if (to.eat && canJumpMore) {
-                successors.push(...generateCaptureSequences(newb, to.r, to.c, [{ from: group.from, to }]));
-            } else {
-                successors.push({ board: newb, sequence: [{ from: group.from, to }] });
-            }
+            if (to.eat && canJumpMore) successors.push(...generateCaptureSequences(newb, to.r, to.c, [{ from: group.from, to }]));
+            else successors.push({ board: newb, sequence: [{ from: group.from, to }] });
         }
     }
     return successors;
@@ -264,10 +366,7 @@ function minimax(bd, depth, alpha, beta, isMaximizing) {
 
 function aiPlay() {
     const succs = getSuccessors('p2', board);
-    if (succs.length === 0) {
-        document.getElementById('status').innerText = "คุณชนะ! 🎉";
-        return;
-    }
+    if (succs.length === 0) { document.getElementById('status').innerText = "คุณชนะ! 🎉"; return; }
     let bestScore = -Infinity, bestSeq = null;
     for (let s of succs) {
         const score = minimax(s.board, DEPTH - 1, -Infinity, Infinity, false);
@@ -277,23 +376,16 @@ function aiPlay() {
 }
 
 function playSequence(seq, index = 0) {
-    if (index >= seq.length) {
-        turn = 'p1';
-        checkGameOver();
-        render();
-        return;
-    }
+    if (index >= seq.length) { turn = 'p1'; checkGameOver(); render(); return; }
     executeMove(seq[index].from, seq[index].to);
     render();
     setTimeout(() => playSequence(seq, index + 1), 500);
 }
 
-// Interaction & Game Logic ------------------------------------------------------------
 function handleCellClick(r, c) {
     if (turn !== 'p1') return;
     const allPossible = getAllPossible('p1', board);
     if (allPossible.length === 0) return;
-
     const hasCapture = allPossible.some(a => a.list.some(m => m.eat));
 
     if (board[r][c]?.p === 'p1') {
@@ -305,7 +397,7 @@ function handleCellClick(r, c) {
         }
         if (canCapture) {
             selected = { r, c, moves: canCapture.list };
-            document.getElementById('status').innerText = "เลือกจุดที่จะเดิน...";
+            document.getElementById('status').innerText = "เลือกจุดเดิน...";
         }
     } else if (selected) {
         const m = selected.moves.find(x => x.r === r && x.c === c);
@@ -332,46 +424,38 @@ function checkGameOver() {
     const p2Moves = getAllPossible('p2', board);
     const counts = countPieces(board);
 
-    // เพิ่มเงื่อนไขเสมอ: เหลือฮอสฝ่ายละ 1 ตัวเท่านั้น (ไม่มีหมากธรรมดา)
-    if (counts.p1Normal === 0 && counts.p2Normal === 0 &&
-        counts.p1King === 1 && counts.p2King === 1) {
-        document.getElementById('status').innerText = "เสมอ — เหลือฮอสฝ่ายละ 1 ตัว 👑⚔️";
+    if (counts.p1Normal === 0 && counts.p2Normal === 0 && counts.p1King === 1 && counts.p2King === 1) {
+        document.getElementById('status').innerText = "เสมอ! 👑⚔️";
         return;
     }
-
-    if (turn === 'p1' && p1Moves.length === 0) {
-        document.getElementById('status').innerText = "คุณแพ้แล้ว! 💀";
-    } else if (turn === 'p2' && p2Moves.length === 0) {
-        document.getElementById('status').innerText = "คุณชนะ! 🎉";
-    } else {
-        document.getElementById('status').innerText = turn === 'p1' ? "ตาของคุณ (ขาว)" : "AI กำลังเดิน...";
-    }
+    if (turn === 'p1' && p1Moves.length === 0) { document.getElementById('status').innerText = "คุณแพ้แล้ว! 💀"; }
+    else if (turn === 'p2' && p2Moves.length === 0) { document.getElementById('status').innerText = "คุณชนะ! 🎉"; }
 }
 
 function render() {
-    const el = document.getElementById('board'); el.innerHTML = '';
+    const el = document.getElementById('board'); 
+    el.innerHTML = '';
     const allPossible = getAllPossible('p1', board);
     const hasCapture = allPossible.some(a => a.list.some(m => m.eat));
+    const counts = countPieces(board);
+    
+    // Update Stats
+    document.getElementById('p1-count').innerText = counts.p1Total;
+    document.getElementById('p2-count').innerText = counts.p2Total;
+    document.getElementById('p1-stat').classList.toggle('active', turn === 'p1');
+    document.getElementById('p2-stat').classList.toggle('active', turn === 'p2');
 
     for (let r=0; r<SIZE; r++) {
         for (let c=0; c<SIZE; c++) {
             const cell = document.createElement('div');
             cell.className = `cell ${(r+c)%2===0?'light':'dark'}`;
-           
             const p = board[r][c];
             if (p) {
                 const pEl = document.createElement('div');
                 pEl.className = `piece ${p.p} ${p.king?'king':''}`;
                 if (selected?.r === r && selected?.c === c) pEl.classList.add('selected');
-               
-                if (turn === 'p1' && !isMultiJumping && hasCapture) {
-                    if (allPossible.some(a => a.from.r === r && a.from.c === c)) {
-                        pEl.classList.add('must-eat');
-                    }
-                }
-                if (isMultiJumping && selected?.r === r && selected?.c === c) {
-                    pEl.classList.add('must-eat');
-                }
+                if (turn === 'p1' && !isMultiJumping && hasCapture && allPossible.some(a => a.from.r === r && a.from.c === c)) pEl.classList.add('must-eat');
+                if (isMultiJumping && selected?.r === r && selected?.c === c) pEl.classList.add('must-eat');
                 cell.appendChild(pEl);
             }
             if (selected?.moves?.some(m => m.r === r && m.c === c)) {
@@ -389,11 +473,9 @@ function resetGame() {
     render();
 }
 
+// Start Game
 initBoard();
-setTimeout(() => {
-    document.getElementById('status').innerText = "ตาของคุณ (ขาว)";
-    render();
-}, 100);
+setTimeout(() => { document.getElementById('status').innerText = "ตาของคุณ (ขาว)"; render(); }, 100);
 </script>
 </body>
 </html>

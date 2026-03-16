@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Thai Checkers - Quick Match Edition</title>
+    <title>Thai Checkers - Pro Dashboard</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
@@ -30,8 +30,8 @@
             padding: 10px;
         }
 
-        /* --- Matchmaking Panel --- */
-        .match-panel {
+        /* --- New Combined Connection Panel --- */
+        .conn-panel {
             width: 100%;
             max-width: 950px;
             background: var(--card-bg);
@@ -45,19 +45,57 @@
             gap: 12px;
         }
 
-        .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+        .conn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+        
+        .id-badge {
+            font-size: 0.75rem;
+            background: #0f172a;
+            padding: 6px 10px;
+            border-radius: 6px;
+            color: var(--accent);
+            border: 1px solid var(--glass-border);
+            display: inline-block;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
 
-        /* --- Main Layout --- */
+        /* --- Matchmaking Button --- */
+        .btn-quick-match {
+            background: var(--success);
+            color: white;
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-quick-match.loading::after {
+            content: "";
+            position: absolute;
+            left: -100%; top: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: loading-scan 1.5s infinite;
+        }
+
+        @keyframes loading-scan { 100% { left: 100%; } }
+
+        /* --- Layout Control --- */
         .main-layout { display: flex; width: 100%; max-width: 950px; gap: 10px; justify-content: center; }
         @media (max-width: 768px) { .main-layout { flex-direction: column; align-items: center; } }
 
+        /* --- Board & Pieces --- */
         .board {
             display: grid; grid-template-columns: repeat(8, 1fr);
             width: 92vw; height: 92vw; max-width: 480px; max-height: 480px;
             background: #1e293b; border: 6px solid #111; border-radius: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: transform 0.6s ease;
         }
-
         .flipped { transform: rotate(180deg); }
         .flipped .piece { transform: rotate(180deg); }
 
@@ -75,6 +113,7 @@
         .king::after { content: '👑'; font-size: 1.2rem; }
         .selected { outline: 3px solid var(--accent); box-shadow: 0 0 15px var(--accent); transform: scale(1.05); }
 
+        /* --- Chat Area --- */
         .chat-area {
             flex: 1; width: 100%; max-width: 320px;
             background: var(--card-bg); border-radius: 12px; border: 1px solid var(--glass-border);
@@ -87,39 +126,33 @@
         .msg-me { background: var(--accent); color: #0f172a; align-self: flex-end; }
         .msg-them { background: rgba(255,255,255,0.1); align-self: flex-start; }
 
-        button { border: none; border-radius: 8px; padding: 10px 16px; cursor: pointer; font-weight: 600; transition: 0.2s; font-family: 'Prompt'; }
-        .btn-quick { background: var(--success); color: white; flex: 1; font-size: 1rem; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3); }
-        .btn-quick:disabled { background: #475569; cursor: not-allowed; }
+        button { border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-weight: 600; transition: 0.2s; font-family: 'Prompt'; }
         .btn-blue { background: var(--accent); color: #0f172a; }
         .btn-outline { background: transparent; border: 1px solid var(--glass-border); color: white; }
 
         .hint { width: 30%; height: 30%; background: #22c55e; border-radius: 50%; opacity: 0.7; position: absolute; pointer-events: none; }
-        #status-text { margin-bottom: 8px; font-weight: 600; color: var(--accent); }
-        
-        /* Animation สำหรับตอนค้นหา */
-        .searching { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        #status-text { margin-bottom: 8px; font-weight: 600; color: var(--accent); text-align: center; }
     </style>
 </head>
 <body>
 
-<div class="match-panel">
-    <div class="row">
-        <button id="btn-match" class="btn-quick" onclick="startQuickMatch()">🚀 จับคู่อัตโนมัติ (Quick Match)</button>
-    </div>
-    <div class="row" style="font-size: 0.8rem; border-top: 1px solid var(--glass-border); pt-10; margin-top: 5px; padding-top: 10px;">
-        <div>
-            <span>ID ของคุณ: </span><b id="my-id" style="color:var(--accent)">กำลังโหลด...</b>
-            <button class="btn-outline" onclick="copyId()" style="padding:2px 8px; font-size:0.7rem;">คัดลอก</button>
+<div class="conn-panel">
+    <button id="btn-match" class="btn-quick-match" onclick="startQuickMatch()">🚀 จับคู่อัตโนมัติ (Quick Match)</button>
+
+    <div class="conn-row">
+        <div style="flex:1;">
+            <span style="font-size: 0.75rem; opacity: 0.7;">ID: </span>
+            <span id="my-id" class="id-badge">กำลังโหลด...</span>
+            <button class="btn-outline" onclick="copyId()" style="padding: 4px 8px; font-size: 0.7rem;">คัดลอก</button>
         </div>
         <div style="display:flex; gap:5px;">
-            <input type="text" id="join-id" placeholder="ใส่ ID เพื่อน..." style="background:#0f172a; border:1px solid var(--glass-border); color:white; border-radius:5px; padding:5px; width:100px;">
-            <button class="btn-blue" onclick="connectPeer()" style="padding:5px 10px; font-size:0.8rem;">เข้าห้อง</button>
+            <input type="text" id="join-id" placeholder="ID เพื่อน..." style="padding: 8px; width: 110px; background: #0f172a; border: 1px solid var(--glass-border); color: white; border-radius: 6px; font-size: 0.8rem;">
+            <button class="btn-blue" onclick="connectPeer()" style="font-size: 0.8rem;">เข้าห้อง</button>
         </div>
     </div>
 </div>
 
-<div id="status-text">โหมด Offline - กดปุ่มสีเขียวเพื่อเริ่มหาเพื่อนเล่น</div>
+<div id="status-text">โหมด Offline</div>
 
 <div class="main-layout">
     <div class="game-area">
@@ -127,81 +160,83 @@
     </div>
 
     <div class="chat-area">
-        <div style="padding:10px; text-align:center; border-bottom:1px solid var(--glass-border); font-size:0.9rem;">💬 แชทสด</div>
+        <div style="padding: 10px; text-align: center; border-bottom: 1px solid var(--glass-border); font-size: 0.9rem;">💬 แชทสด</div>
         <div class="messages" id="chat-msgs"></div>
-        <div style="display:flex; padding:8px; gap:5px;">
-            <input type="text" id="chat-in" placeholder="พิมพ์ข้อความ..." style="flex:1; background:#0f172a; border:1px solid var(--glass-border); color:white; border-radius:5px; padding:8px;" onkeypress="if(event.key==='Enter') sendMsg()">
+        <div style="display:flex; padding:8px; gap:5px; background: rgba(0,0,0,0.2);">
+            <input type="text" id="chat-in" placeholder="พิมพ์คุย..." style="flex:1; background:#0f172a; border:1px solid var(--glass-border); color:white; border-radius:5px; padding:8px;" onkeypress="if(event.key==='Enter') sendMsg()">
             <button class="btn-blue" onclick="sendMsg()">ส่ง</button>
         </div>
     </div>
 </div>
 
 <script>
-// --- MATCHMAKING LOGIC ---
-const LOBBY_PREFIX = "thai_checkers_room_"; 
 let peer, conn, myRole = 'p1', isOnline = false;
+const SIZE = 8;
+let board = [], turn = 'p1', selected = null, isMultiJumping = false;
+
+// --- MATCHMAKING LOGIC ---
+const LOBBY_IDS = Array.from({length: 10}, (_, i) => `thai_checkers_lobby_${i+1}`);
 
 function initPeer() {
     peer = new Peer();
     peer.on('open', id => document.getElementById('my-id').innerText = id);
-    peer.on('connection', c => handleIncomingConnection(c));
+    peer.on('connection', c => {
+        if(isOnline) return; // กันคนอื่นแทรกขณะเล่น
+        conn = c; myRole = 'p1'; isOnline = true;
+        document.getElementById('board').classList.remove('flipped');
+        document.getElementById('btn-match').innerText = "🎮 พบคู่แข่งแล้ว!";
+        document.getElementById('btn-match').classList.remove('loading');
+        setupConn(); resetGame();
+    });
 }
 
 async function startQuickMatch() {
     const btn = document.getElementById('btn-match');
+    btn.classList.add('loading');
     btn.disabled = true;
     btn.innerText = "🔍 กำลังค้นหาคู่แข่ง...";
-    btn.classList.add('searching');
-    document.getElementById('status-text').innerText = "กำลังมองหาห้องว่าง...";
-
-    // สุ่มเช็คห้อง 1-5 (จำลอง Lobby)
-    for (let i = 1; i <= 5; i++) {
-        let roomId = LOBBY_PREFIX + i;
+    
+    // ลองสุ่มเชื่อมต่อกับห้อง Lobby
+    for (const lobbyId of LOBBY_IDS.sort(() => Math.random() - 0.5)) {
         try {
-            const checkConn = peer.connect(roomId);
-            const success = await new Promise((resolve) => {
-                const timeout = setTimeout(() => { checkConn.close(); resolve(false); }, 1500);
-                checkConn.on('open', () => { clearTimeout(timeout); resolve(true); });
+            const tempConn = peer.connect(lobbyId);
+            const success = await new Promise(res => {
+                const timer = setTimeout(() => { tempConn.close(); res(false); }, 2000);
+                tempConn.on('open', () => { clearTimeout(timer); res(true); });
             });
 
             if (success) {
-                conn = checkConn;
-                myRole = 'p2';
-                isOnline = true;
+                conn = tempConn;
+                myRole = 'p2'; isOnline = true;
                 document.getElementById('board').classList.add('flipped');
+                btn.innerText = "✅ เชื่อมต่อสำเร็จ!";
+                btn.classList.remove('loading');
                 setupConn();
-                btn.innerText = "✅ เจอคู่แข่งแล้ว!";
-                btn.classList.remove('searching');
                 return;
             }
-        } catch (e) {}
+        } catch(e) {}
     }
 
-    // ถ้าไม่เจอใครเลย ให้เราตั้งตนเป็น Host ในห้องสุ่มนั้นเอง
-    const myTempRoomId = LOBBY_PREFIX + Math.floor(Math.random() * 5 + 1);
-    // Note: ใน PeerJS ตัวฟรี เราไม่สามารถจอง ID เจาะจงได้เสถียร 
-    // วิธีนี้จึงเป็นการรอให้คนอื่นสุ่มมาเจอ ID ของเราแทน (หรือใช้ ID ปัจจุบันเราเป็นหลัก)
-    document.getElementById('status-text').innerText = "ไม่พบห้องว่าง... กำลังเปิดห้องรอคู่แข่ง";
-    // สำหรับระบบนี้ แนะนำให้เพื่อนก๊อป ID จะเสถียรกว่า แต่ Quick Match จะทำงานเมื่อมีคนกดพร้อมกันเยอะๆ
+    // ถ้าไม่เจอใคร ให้เรา "จอง" ชื่อ Lobby นั้นแทน (ถ้า PeerJS ยอมให้จอง)
+    // แต่สำหรับระบบ P2P ฟรี วิธีที่เสถียรที่สุดคือให้คนหนึ่งรอรับสาย (Incoming)
+    btn.innerText = "📡 ไม่พบห้องว่าง... กำลังรอคนมาจับคู่";
+    document.getElementById('status-text').innerText = "คุณเป็น Host ของห้อง... โปรดรอสักครู่";
+    // ระบบจะทำงานต่ออัตโนมัติเมื่อมีคนอื่นกด Quick Match แล้วสุ่มมาเจอ Peer ID ของเรา
 }
 
-function handleIncomingConnection(c) {
-    if (conn) conn.close();
-    conn = c;
-    myRole = 'p1';
-    isOnline = true;
-    document.getElementById('board').classList.remove('flipped');
-    const btn = document.getElementById('btn-match');
-    btn.innerText = "🎮 คู่แข่งเข้าห้องแล้ว!";
-    btn.classList.remove('searching');
+function connectPeer() {
+    const tid = document.getElementById('join-id').value.trim();
+    if(!tid) return;
+    conn = peer.connect(tid);
+    myRole = 'p2'; isOnline = true;
+    document.getElementById('board').classList.add('flipped');
     setupConn();
-    resetGame();
 }
 
 function setupConn() {
     conn.on('open', () => {
         document.getElementById('status-text').innerText = (myRole==='p1'?"ฝั่งขาว (คุณ)":"ฝั่งแดง (คุณ)");
-        addMsg('system', '--- คู่แข่งเข้าสู่เกม ---');
+        addMsg('system', '--- เริ่มเกมได้ ---');
         render();
     });
     conn.on('data', data => {
@@ -216,19 +251,7 @@ function setupConn() {
     });
 }
 
-function connectPeer() {
-    const tid = document.getElementById('join-id').value.trim();
-    if(!tid) return;
-    conn = peer.connect(tid);
-    myRole = 'p2'; isOnline = true;
-    document.getElementById('board').classList.add('flipped');
-    setupConn();
-}
-
-// --- GAME LOGIC (หมากฮอส) ---
-const SIZE = 8;
-let board = [], turn = 'p1', selected = null, isMultiJumping = false;
-
+// --- GAME LOGIC ---
 function initBoard() {
     board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
     for (let r=0; r<2; r++) for (let c=0; c<SIZE; c++) if ((r+c)%2!==0) board[r][c] = {p:'p2', king:false};
@@ -278,8 +301,9 @@ function executeMove(from, to, b = board) {
     if (!m) return false;
     b[to.r][to.c] = p; b[from.r][from.c] = null;
     if (m.eat) b[m.eat.r][m.eat.c] = null;
-    if (!p.king && ((p.p === 'p1' && to.r === 0) || (p.p === 'p2' && to.r === 7))) { p.king = true; }
-    return m.eat && getValidMoves(to.r, to.c, b, true).length > 0;
+    let promoted = false;
+    if (!p.king && ((p.p === 'p1' && to.r === 0) || (p.p === 'p2' && to.r === 7))) { p.king = true; promoted = true; }
+    return m.eat && !promoted && getValidMoves(to.r, to.c, b, true).length > 0;
 }
 
 function handleCellClick(r, c) {
@@ -334,8 +358,8 @@ function render() {
     }));
     const status = document.getElementById('status-text');
     const turnName = turn === 'p1' ? "ขาว" : "แดง";
-    status.innerText = (turn === myRole) ? `ตาของคุณ (${turnName})` : `รอคู่แข่ง (${turnName})`;
-    status.style.color = (turn === myRole) ? "var(--accent)" : "#f87171";
+    status.innerText = (turn === myRole) ? `ตาของคุณ (${turnName})` : `รอฝั่งตรงข้าม (${turnName})`;
+    status.style.color = (turn === myRole) ? "var(--accent)" : "#ef4444";
 }
 
 function sendMsg() {

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thai Checkers - True Perspective Online</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --board-dark: #2c3e50;
+            --board-light: #ecf0f1;
+            --accent: #f1c40f;
+            --glass: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: white;
+            font-family: 'Prompt', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .online-panel {
+            background: var(--glass);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: var(--glass);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* ส่วนสำคัญ: การพลิกกระดาน */
+        .board-wrapper {
+            perspective: 1000px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            border: 8px solid #222;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* คลาสสำหรับพลิกกระดาน 180 องศา */
+        .flipped {
+            transform: rotate(180deg);
+        }
+
+        /* พลิกหมากกลับเพื่อให้ตัวเลข/มงกุฎไม่กลับหัว */
+        .flipped .piece {
+            transform: rotate(180deg);
+        }
+
+        .cell {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .dark { background: var(--board-dark); }
+        .light { background: var(--board-light); }
+
+        .piece {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            transition: 0.3s;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .p1 { background: radial-gradient(circle at 30% 30%, #fff, #bdc3c7); }
+        .p2 { background: radial-gradient(circle at 30% 30%, #ff7675, #d63031); }
+        .king::after { content: '👑'; font-size: 20px; }
+        
+        .selected { outline: 3px solid var(--accent); transform: scale(1.1); z-index: 10; }
+        .must-eat { animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); } 100% { box-shadow: 0 0 0 10px rgba(241, 196, 15, 0); } }
+
+        input { padding: 8px; border-radius: 5px; border: none; outline: none; }
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button.alt { background: #3498db; }
+
+        .hint { width: 15px; height: 15px; background: rgba(46, 204, 113, 0.6); border-radius: 50%; position: absolute; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div class="online-panel">
+    <div id="peer-info">ID: <b id="my-id">กำลังโหลด...</b></div>
+    <input type="text" id="join-id" placeholder="ID เพื่อน">
+    <button onclick="connectToPeer()">เข้าห้อง</button>
+    <button class="alt" onclick="copyMyId()">คัดลอก ID</button>
+</div>
+
+<div class="game-container">
+    <div id="status">ยินดีต้อนรับ! เลือกสร้างห้องหรือจอยเพื่อน</div>
+    <div class="board-wrapper">
+        <div class="board" id="board"></div>
+    </div>
+    <div id="role-display" style="color: var(--accent); font-weight: bold;">โหมด: Offline</div>
+</div>
+
+<script>
+// --- NETWORK & PERSPECTIVE LOGIC ---
+let peer, conn;
+let myRole = 'p1'; 
+let isOnline = false;
+
+function initPeer() {
+    peer = new Peer();
+    peer.on('open', id => document.getElementById('my-id').innerText = id);
+    
+    peer.on('connection', c => {
+        conn = c;
+        myRole = 'p1'; // Host เป็นขาวเสมอ
+        isOnline = true;
+        setupConn();
+        document.getElementById('role-display').innerText = "คุณคือ: ฝั่งขาว (หมากอยู่ล่าง)";
+        document.getElementById('board').classList.remove('flipped'); // ขาวอยู่ล่าง ไม่ต้องพลิก
+        resetGame();
+    });
+}
+
+function connectToPeer() {
+    const targetId = document.getElementById('join-id').value;
+    if (!targetId) return alert("กรุณาใส่ ID");
+    
+    conn = peer.connect(targetId);
+    myRole = 'p2'; // Joiner เป็นแดงเสมอ
+    isOnline = true;
+    setupConn();
+    document.getElementById('role-display').innerText = "คุณคือ: ฝั่งแดง (หมากอยู่ล่าง)";
+    document.getElementById('board').classList.add('flipped'); // พลิกกระดานให้แดงอยู่ล่าง
+}
+
+function setupConn() {
+    conn.on('open', () => {
+        document.getElementById('status').innerText = "เชื่อมต่อสำเร็จ! เริ่มเกมได้";
+        render();
+    });
+    conn.on('data', data => {
+        if (data.type === 'MOVE') {
+            executeMove(data.from, data.to);
+            turn = data.nextTurn;
+            isMultiJumping = data.isMulti;
+            if(isMultiJumping) selected = { r: data.to.r, c: data.to.c, moves: getValidMoves(data.to.r, data.to.c, board, true) };
+            else selected = null;
+            render();
+        }
+    });
+}
+
+// --- GAME LOGIC ---
+const SIZE = 8;
+let board = [], turn = 'p1', selected = null, isMultiJumping = false;
+
+function initBoard() {
+    board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
+    for (let r=0; r<2; r++) for (let c=0; c<SIZE; c++) if ((r+c)%2!==0) board[r][c] = {p:'p2', king:false};
+    for (let r=6; r<8; r++) for (let c=0; c<SIZE; c++) if ((r+c)%2!==0) board[r][c] = {p:'p1', king:false};
+}
+
+function getValidMoves(r, c, b, forceEatOnly = false) {
+    const p = b[r][c]; if (!p) return [];
+    let ms = [], caps = [];
+    const dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+    const fwd = p.p === 'p1' ? -1 : 1;
+
+    if (p.king) {
+        dirs.forEach(([dr, dc]) => {
+            let tr = r + dr, tc = c + dc, enemyPos = null;
+            while (tr >= 0 && tr < SIZE && tc >= 0 && tc < SIZE) {
+                if (!enemyPos) {
+                    if (b[tr][tc]) {
+                        if (b[tr][tc].p !== p.p) enemyPos = {r: tr, c: tc};
+                        else break;
+                    } else if (!forceEatOnly) ms.push({r: tr, c: tc});
+                } else {
+                    if (!b[tr][tc]) caps.push({r: tr, c: tc, eat: enemyPos});
+                    else break;
+                }
+                tr += dr; tc += dc;
+            }
+        });
+    } else {
+        dirs.forEach(([dr, dc]) => {
+            const tr = r + dr, tc = c + dc, nr = r + dr * 2, nc = c + dc * 2;
+            if (dr === fwd && nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+                if (b[tr][tc] && b[tr][tc].p !== p.p && !b[nr][nc]) caps.push({r: nr, c: nc, eat: {r: tr, c: tc}});
+            }
+            if (!forceEatOnly && dr === fwd && tr >= 0 && tr < SIZE && tc >= 0 && tc < SIZE) {
+                if (!b[tr][tc]) ms.push({r: tr, c: tc});
+            }
+        });
+    }
+    return caps.length > 0 ? caps : (forceEatOnly ? [] : ms);
+}
+
+function getAllPossible(player, b) {
+    let all = [];
+    for(let r=0; r<SIZE; r++) {
+        for(let c=0; c<SIZE; c++) {
+            if(b[r][c]?.p === player) {
+                const moves = getValidMoves(r, c, b);
+                if(moves.length > 0) all.push({from: {r, c}, list: moves});
+            }
+        }
+    }
+    const hasCapture = all.some(a => a.list.some(m => m.eat));
+    if (hasCapture) return all.filter(a => a.list.some(m => m.eat)).map(a => ({from: a.from, list: a.list.filter(m => m.eat)}));
+    return all;
+}
+
+function executeMove(from, to, b = board) {
+    const p = b[from.r][from.c];
+    const moves = getValidMoves(from.r, from.c, b);
+    const m = moves.find(x => x.r === to.r && x.c === to.c);
+    if (!m) return false;
+    b[to.r][to.c] = p; b[from.r][from.c] = null;
+    if (m.eat) b[m.eat.r][m.eat.c] = null;
+    let promoted = false;
+    if (!p.king && ((p.p === 'p1' && to.r === 0) || (p.p === 'p2' && to.r === 7))) { p.king = true; promoted = true; }
+    return m.eat && !promoted && getValidMoves(to.r, to.c, b, true).length > 0;
+}
+
+function handleCellClick(r, c) {
+    if (isOnline && turn !== myRole) return;
+
+    const allPossible = getAllPossible(turn, board);
+    const hasCapture = allPossible.some(a => a.list.some(m => m.eat));
+
+    if (board[r][c]?.p === turn) {
+        if (isMultiJumping) return;
+        const canCapture = allPossible.find(a => a.from.r === r && a.from.c === c);
+        if (hasCapture && (!canCapture || !canCapture.list[0].eat)) return;
+        if (canCapture) selected = { r, c, moves: canCapture.list };
+    } else if (selected) {
+        const m = selected.moves.find(x => x.r === r && x.c === c);
+        if (m) {
+            const fromPos = {r: selected.r, c: selected.c};
+            const jumping = executeMove(fromPos, {r, c});
+            let nextTurn = turn;
+            if (!jumping) nextTurn = turn === 'p1' ? 'p2' : 'p1';
+            if (isOnline) conn.send({ type: 'MOVE', from: fromPos, to: {r, c}, nextTurn, isMulti: jumping });
+
+            if (jumping) {
+                isMultiJumping = true;
+                selected = { r, c, moves: getValidMoves(r, c, board, true) };
+            } else {
+                isMultiJumping = false;
+                selected = null;
+                turn = nextTurn;
+            }
+        }
+    }
+    render();
+}
+
+function render() {
+    const el = document.getElementById('board'); el.innerHTML = '';
+    const allPossible = getAllPossible(turn, board);
+    const hasCapture = allPossible.some(a => a.list.some(m => m.eat));
+
+    board.forEach((row, r) => row.forEach((p, c) => {
+        const cell = document.createElement('div');
+        cell.className = `cell ${(r+c)%2===0?'light':'dark'}`;
+        if (p) {
+            const pEl = document.createElement('div');
+            pEl.className = `piece ${p.p} ${p.king?'king':''} ${selected?.r===r&&selected?.c===c?'selected':''}`;
+            if (turn === p.p && hasCapture && allPossible.some(a => a.from.r === r && a.from.c === c)) pEl.classList.add('must-eat');
+            cell.appendChild(pEl);
+        }
+        if (selected?.moves?.some(m => m.r === r && m.c === c)) {
+            const h = document.createElement('div'); h.className = 'hint'; cell.appendChild(h);
+        }
+        cell.onclick = () => handleCellClick(r, c);
+        el.appendChild(cell);
+    }));
+    
+    const turnName = turn === 'p1' ? "ขาว" : "แดง";
+    const statusEl = document.getElementById('status');
+    if (isOnline) {
+        statusEl.innerText = turn === myRole ? `ตาของคุณเดิน (${turnName})` : `รอฝั่งตรงข้ามเดิน... (${turnName})`;
+        statusEl.style.color = turn === myRole ? "#2ecc71" : "#e74c3c";
+    } else {
+        statusEl.innerText = `ตาฝั่ง${turnName}`;
+    }
+}
+
+function copyMyId() {
+    navigator.clipboard.writeText(document.getElementById('my-id').innerText);
+    alert("คัดลอก ID แล้ว ส่งให้เพื่อนได้เลย!");
+}
+
+function resetGame() {
+    initBoard(); turn='p1'; selected=null; isMultiJumping = false;
+    render();
+}
+
+initBoard();
+initPeer();
+render();
+</script>
+</body>
+</html>
